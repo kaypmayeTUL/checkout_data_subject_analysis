@@ -499,6 +499,7 @@ plotly
             - **Location Name** column (optional): Physical location of items
             - **LC Classification Code** column (optional): Library classification codes
             - **Loans** or similar column (optional): Number of checkouts
+            - **Tulane University Libraians can access this data through the Alma Physical Usage tool.**
             
             ### Step 2: Upload your file
             - Click the upload area above or drag and drop your CSV file
