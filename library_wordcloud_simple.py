@@ -1,5 +1,5 @@
 """
-Subject Analysis Tool for Physical Checkout Data - Simple Upload Version
+Subject Analysis Tool for Physical Checkout Data - Combined Filter Version
 Upload your CSV file and instantly generate word clouds and frequency tables.
 """
 
@@ -246,42 +246,36 @@ def main():
         
         # Settings in sidebar
         with st.sidebar:
-            st.header("⚙️ Settings")
+            st.header("⚙️ Filter Data")
             
-            # Analysis type based on available columns
-            analysis_options = ["Overall Collection"]
+            # --- Location Filter (always present if column exists) ---
+            selected_locations = None
             if has_location:
-                analysis_options.append("By Location")
-            if has_lc:
-                analysis_options.append("By LC Classification")
-            
-            analysis_type = st.selectbox(
-                "Analysis Type",
-                analysis_options,
-                help="Choose how to analyze your data"
-            )
-            
-            # Specific selector based on analysis type (now using MULTISELECT)
-            selected_items = None
-            if analysis_type == "By Location" and has_location:
                 locations = sorted(df['Location Name'].dropna().unique())
-                selected_items = st.multiselect(
-                    "Select Location(s)",
+                selected_locations = st.multiselect(
+                    "Filter by Location(s)",
                     locations,
-                    default=locations # Default to selecting all locations
-                )
-            elif analysis_type == "By LC Classification" and has_lc:
-                lc_codes = sorted(df['LC Classification Code'].dropna().unique())
-                selected_items = st.multiselect(
-                    "Select LC Class(es)",
-                    lc_codes,
-                    default=lc_codes # Default to selecting all LC codes
+                    # Default to selecting all locations
+                    default=locations, 
+                    help="Select one or more locations to include in the analysis."
                 )
             
+            # --- LC Classification Filter (always present if column exists) ---
+            selected_lc_codes = None
+            if has_lc:
+                lc_codes = sorted(df['LC Classification Code'].dropna().unique())
+                selected_lc_codes = st.multiselect(
+                    "Filter by LC Class(es)",
+                    lc_codes,
+                    # Default to selecting all LC codes
+                    default=lc_codes, 
+                    help="Select one or more LC classifications to include in the analysis."
+                )
+
             st.markdown("---")
             
             # Word cloud settings
-            st.subheader("Word Cloud Settings")
+            st.header("⚙️ Word Cloud Settings")
             
             max_words = st.slider(
                 "Maximum words",
@@ -316,32 +310,34 @@ def main():
         # Generate button
         if st.button("🎨 Generate Word Cloud", type="primary", use_container_width=True):
             
-            # Filter data based on selection
-            if analysis_type == "Overall Collection":
-                filtered_df = df
-                title_suffix = "Entire Collection"
+            filtered_df = df.copy()
+            title_parts = []
             
-            elif analysis_type == "By Location" and selected_items:
-                # Use isin() to filter for multiple selections
-                filtered_df = df[df['Location Name'].isin(selected_items)]
-                # Create a concise title suffix
-                display_list = selected_items[:2]
-                title_suffix = f"Locations: {', '.join(display_list)}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
-            
-            elif analysis_type == "By LC Classification" and selected_items:
-                # Use isin() to filter for multiple selections
-                filtered_df = df[df['LC Classification Code'].isin(selected_items)]
-                # Create a concise title suffix with descriptions
-                display_codes = [f"{c}" for c in selected_items]
-                title_suffix = f"LC Classes: {', '.join(display_codes[:2])}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
-            
+            # 1. Apply Location Filter
+            if has_location and selected_locations:
+                # Apply filter regardless of whether all are selected, 
+                # but only update the title if it's a subset
+                filtered_df = filtered_df[filtered_df['Location Name'].isin(selected_locations)]
+                if len(selected_locations) < len(df['Location Name'].dropna().unique()):
+                    display_list = selected_locations[:2]
+                    title_parts.append(f"Locations: {', '.join(display_list)}{'...' if len(selected_locations) > 2 else ''} ({len(selected_locations)} locs)")
+
+            # 2. Apply LC Classification Filter
+            if has_lc and selected_lc_codes:
+                filtered_df = filtered_df[filtered_df['LC Classification Code'].isin(selected_lc_codes)]
+                if len(selected_lc_codes) < len(df['LC Classification Code'].dropna().unique()):
+                    display_codes = [f"{c}" for c in selected_lc_codes]
+                    title_parts.append(f"LC Classes: {', '.join(display_codes[:2])}{'...' if len(selected_lc_codes) > 2 else ''} ({len(selected_lc_codes)} classes)")
+
+            # Determine the final title suffix
+            if title_parts:
+                title_suffix = " | ".join(title_parts)
             else:
-                filtered_df = df
-                title_suffix = "All Data"
+                title_suffix = "Entire Collection"
 
             # Check if any data remains after filtering
             if filtered_df.empty:
-                st.warning(f"No data found for the selected {analysis_type.split(' ')[1].lower()}(s). Please adjust your selection.")
+                st.warning("No data found for the selected combination of Location(s) and LC Classification(s). Please adjust your selection.")
                 return
 
             # Process subjects
@@ -372,7 +368,7 @@ def main():
                 ax.imshow(wordcloud, interpolation='bilinear')
                 ax.axis('off')
                 ax.set_title(f'Subject Terms - {title_suffix}\n(Weighted by Checkouts)', 
-                           fontsize=16, fontweight='bold', pad=20)
+                            fontsize=16, fontweight='bold', pad=20)
                 st.pyplot(fig)
                 
                 # Download button for word cloud
@@ -506,8 +502,7 @@ plotly
             - The tool will automatically detect the columns
             
             ### Step 3: Configure settings
-            - Choose analysis type (Overall, By Location, or By LC Classification)
-            - **Note:** For Location and LC Classification, you can now select **multiple** options.
+            - **Use the sidebar to apply combined filters for Location(s) and LC Classification(s).**
             - Adjust word cloud settings in the sidebar
             - Select display options
             
@@ -523,7 +518,7 @@ plotly
             
             **Pro Tip:** Use the multi-select feature to compare usage trends between two similar branches or across a few key LC subjects!
             """)
-        
+            
         with st.expander("📊 Sample data format"):
             sample_data = pd.DataFrame({
                 'Title': ['Book 1', 'Book 2', 'Book 3'],
