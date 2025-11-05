@@ -16,7 +16,7 @@ import base64
 
 # Page configuration
 st.set_page_config(
-    page_title="Subject Analysis Tool for Physical Checkout Data",
+    page_title="Subject Analysis Tool for Physical Checkout Data | Tulane University Libraries",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -575,8 +575,8 @@ plotly
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Subject Analysis Tool for Physical Checkout DataGenerator v1.0 | Built with Streamlit | Built with assistance from Claude AI</p>
-            <p>For support, contact Kay P Maye at kmaye@tualne.edu </p>
+            <p>Subject Analysis Tool for Physical Checkout Data v1.0 | Built with Streamlit | Built with assistance from Claude AI</p>
+            <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
         </div>
         """, unsafe_allow_html=True)
 
