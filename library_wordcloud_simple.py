@@ -1,3 +1,8 @@
+"""
+Library Word Cloud Generator - Multi-Collection Version
+Upload your library CSV file (Physical, Digital, or COUNTER) and instantly generate word clouds!
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,7 +16,7 @@ import base64
 
 # Page configuration
 st.set_page_config(
-    page_title="Subject Analysis Tool for Physical Checkout Data | Tulane University Libraries",
+    page_title="Library Word Cloud Generator",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -62,44 +67,23 @@ st.markdown("""
 
 # LC Classification descriptions (simplified)
 LC_CLASSIFICATIONS = {
-    'A': 'General Works',
-    'B': 'Philosophy, Psychology, Religion',
-    'C': 'Auxiliary Sciences of History',
-    'D': 'World History',
-    'E': 'US History',
-    'F': 'History of the Americas',
-    'G': 'Geography, Anthropology',
-    'H': 'Social Sciences',
-    'J': 'Political Science',
-    'K': 'Law',
-    'L': 'Education',
-    'M': 'Music',
-    'N': 'Fine Arts',
-    'P': 'Language and Literature',
-    'Q': 'Science',
-    'R': 'Medicine',
-    'S': 'Agriculture',
-    'T': 'Technology',
-    'U': 'Military Science',
-    'V': 'Naval Science',
+    'A': 'General Works', 'B': 'Philosophy, Psychology, Religion',
+    'C': 'Auxiliary Sciences of History', 'D': 'World History',
+    'E': 'US History', 'F': 'History of the Americas',
+    'G': 'Geography, Anthropology', 'H': 'Social Sciences',
+    'J': 'Political Science', 'K': 'Law', 'L': 'Education',
+    'M': 'Music', 'N': 'Fine Arts', 'P': 'Language and Literature',
+    'Q': 'Science', 'R': 'Medicine', 'S': 'Agriculture',
+    'T': 'Technology', 'U': 'Military Science', 'V': 'Naval Science',
     'Z': 'Bibliography, Library Science'
 }
-
-def get_lc_description(code):
-    """Get description for LC classification code"""
-    if not code or pd.isna(code):
-        return "Unknown"
-    code = str(code).strip().upper()
-    if code and code[0] in LC_CLASSIFICATIONS:
-        return LC_CLASSIFICATIONS[code[0]]
-    return f"LC Class {code}"
 
 def clean_subject_term(term):
     """Clean and standardize subject terms"""
     if pd.isna(term) or term == '':
         return None
     
-    term = term.strip()
+    term = str(term).strip()
     term = term.rstrip('.;')
     # Remove date ranges in parentheses
     term = re.sub(r'\s*\([0-9\-]+\)', '', term)
@@ -108,72 +92,74 @@ def clean_subject_term(term):
     
     return term if term else None
 
-def process_subjects(subjects_str, loans):
+def process_subjects(subjects_str, weight):
     """Process subject string into weighted dictionary"""
     if pd.isna(subjects_str) or subjects_str == '':
         return {}
     
+    # COUNTER reports often use a single subject per resource, but this handles multiple
     subjects = subjects_str.split(';')
     weighted_subjects = {}
     
     for subject in subjects:
         cleaned = clean_subject_term(subject)
         if cleaned:
-            weighted_subjects[cleaned] = weighted_subjects.get(cleaned, 0) + loans
+            weighted_subjects[cleaned] = weighted_subjects.get(cleaned, 0) + weight
     
     return weighted_subjects
 
-def generate_wordcloud(word_freq, min_word_length=3, max_words=100, colormap='viridis'):
-    """Generate word cloud from frequency dictionary"""
-    if not word_freq:
-        return None
-    
-    # Filter short words
-    filtered_freq = {word: freq for word, freq in word_freq.items() 
-                      if len(word) >= min_word_length}
-    
-    if not filtered_freq:
-        return None
-    
-    wordcloud = WordCloud(
-        width=1200,
-        height=600,
-        background_color='white',
-        colormap=colormap,
-        max_words=max_words,
-        relative_scaling=0.5,
-        min_font_size=10,
-        prefer_horizontal=0.7
-    ).generate_from_frequencies(filtered_freq)
-    
-    return wordcloud
-
-def create_download_link(df, filename="data.csv"):
-    """Create a download link for dataframe"""
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
-    return href
-
 # Main app
 def main():
-    # Header with instructions
-    st.title("📚 Subject Analysis Tool for Physical Checkout Data | Tulane University Libraries")
-    st.markdown("### Upload your CSV file and instantly generate word clouds and frequency tables.")
     
-    # ------------------------------------------------------------------------------------------------
-    # FIX INTEGRATION: 1. Initialize session state
-    # This dictionary will store the results of the analysis when the button is pressed.
-    if 'analysis_data' not in st.session_state:
-        st.session_state.analysis_data = None
-        
-    # Create columns for layout
+    # Header
+    st.title("📚 Library Collection Subject Analyzer")
+    st.markdown("### Upload your usage data (Physical, Digital, or COUNTER) to analyze subject trends.")
+    
+    # Data Type Selection (First step in sidebar)
+    with st.sidebar:
+        st.header("⚙️ Data Source")
+        data_type = st.radio(
+            "Select Data Collection Type:",
+            ['Physical Collections', 'Digital Collections (Local)', 'COUNTER Reports (e-resources)'],
+            index=0,
+            help="This determines the required columns and usage metric."
+        )
+        st.markdown("---")
+
+    # Column definitions based on data type
+    if data_type == 'Physical Collections':
+        WEIGHT_COL_ALIASES = ['Loans', 'Checkouts', 'Circulation']
+        METRIC_TITLE = "Total Checkouts"
+        METRIC_UNIT = "Checkouts"
+        FILTER_COLS = {
+            'Location': 'Location Name',
+            'LC Classification': 'LC Classification Code'
+        }
+    elif data_type == 'Digital Collections (Local)':
+        WEIGHT_COL_ALIASES = ['Downloads', 'Views']
+        METRIC_TITLE = "Total Usage (D/V)"
+        METRIC_UNIT = "Views + Downloads"
+        FILTER_COLS = {
+            'Resource Name': 'Name of file',
+            'Collection Name': 'Collection Name'
+        }
+    else: # COUNTER Reports (e-resources)
+        WEIGHT_COL_ALIASES = ['Total_Item_Requests', 'Unique_Item_Requests', 'Total_Requests', 'Searches_Platform']
+        METRIC_TITLE = "Total Usage (COUNTER)"
+        METRIC_UNIT = "Requests"
+        FILTER_COLS = {
+            'Title': 'Title',
+            'Platform': 'Platform',
+            'Publisher': 'Publisher'
+        }
+
+    # Upload section
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("""
+        st.markdown(f"""
         <div class="uploadbox">
-            <h2>📂 Upload Your Data</h2>
+            <h2>📂 Upload {data_type} CSV</h2>
             <p>Drag and drop or click to browse</p>
         </div>
         """, unsafe_allow_html=True)
@@ -181,15 +167,14 @@ def main():
         uploaded_file = st.file_uploader(
             "Choose your CSV file",
             type=['csv'],
-            help="Upload the library circulation data CSV file",
+            help=f"Upload the {data_type.lower()} data CSV file",
             label_visibility="collapsed"
         )
     
     if uploaded_file is not None:
-        # Success message
         st.success(f"✅ File '{uploaded_file.name}' uploaded successfully!")
         
-        # Load and process data
+        # Load data
         try:
             df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
         except:
@@ -202,28 +187,55 @@ def main():
         # Clean column names
         df.columns = df.columns.str.strip()
         
-        # Check for required columns
-        has_location = 'Location Name' in df.columns
-        has_lc = 'LC Classification Code' in df.columns
-        
+        # --- Column Validation and Weighting ---
         if 'Subjects' not in df.columns:
-            st.error("❌ CSV must contain a 'Subjects' column")
-            st.info("Required columns: Subjects, Location Name (optional), LC Classification Code (optional)")
+            st.error("❌ CSV must contain a 'Subjects' column.")
+            st.info(f"Required column: **Subjects**.")
             return
-        
-        # Find and process loan column
-        loan_col = None
-        for col in df.columns:
-            if 'Loan' in col and 'Year' not in col:
-                loan_col = col
+
+        weight_col = None
+        # Try to find a specific weight column based on alias list
+        current_aliases = WEIGHT_COL_ALIASES
+        for alias in current_aliases:
+            if alias in df.columns:
+                weight_col = alias
                 break
         
-        if loan_col:
-            df['Loans'] = pd.to_numeric(df[loan_col], errors='coerce').fillna(1)
-        else:
-            df['Loans'] = 1
-            st.warning("No loan column found. Treating all items as having 1 checkout.")
-        
+        # Scenario 1: Digital Collections (Local) - Needs combined D/V logic if no single weight col found
+        if data_type == 'Digital Collections (Local)' and not weight_col:
+            has_downloads = 'Downloads' in df.columns
+            has_views = 'Views' in df.columns
+            
+            if has_downloads or has_views:
+                if has_downloads: df['Downloads'] = pd.to_numeric(df['Downloads'], errors='coerce').fillna(0)
+                if has_views: df['Views'] = pd.to_numeric(df['Views'], errors='coerce').fillna(0)
+                
+                weight_val = (df['Downloads'] if has_downloads else 0) + (df['Views'] if has_views else 0)
+                df['Weight'] = weight_val
+                
+                final_metric = ("Downloads" if has_downloads else "") + (" + " if has_downloads and has_views else "") + ("Views" if has_views else "")
+                METRIC_TITLE = f"Total Usage ({final_metric})"
+                METRIC_UNIT = final_metric
+            else:
+                weight_col = None # Ensure it falls to default if neither D nor V found
+
+        # Scenario 2: Standard/COUNTER/Fallback (If a column was found or falls to default)
+        if weight_col:
+            df[weight_col] = pd.to_numeric(df[weight_col], errors='coerce').fillna(0)
+            df['Weight'] = df[weight_col]
+            final_metric = weight_col
+            METRIC_TITLE = f"Total Usage ({final_metric})"
+            METRIC_UNIT = final_metric
+        elif 'Weight' not in df.columns: # Default to 1 if no specific weight column or D/V calculation succeeded
+            st.warning(f"No standard usage column found for {data_type}. Treating all items as having 1 unit of usage.")
+            df['Weight'] = 1
+            final_metric = "Records"
+            METRIC_TITLE = "Total Usage (Records)"
+            METRIC_UNIT = "Records"
+
+        # Ensure numeric conversion for the final metric calculation
+        df['Weight'] = pd.to_numeric(df['Weight'], errors='coerce').fillna(0)
+
         # Display data overview
         st.markdown("---")
         st.subheader("📊 Data Overview")
@@ -232,116 +244,98 @@ def main():
         with col1:
             st.metric("Total Records", f"{len(df):,}")
         with col2:
-            st.metric("Total Checkouts", f"{df['Loans'].sum():,}")
-        with col3:
-            if has_location:
-                st.metric("Locations", df['Location Name'].nunique())
-            else:
-                st.metric("Locations", "N/A")
-        with col4:
-            if has_lc:
-                st.metric("LC Classes", df['LC Classification Code'].nunique())
-            else:
-                st.metric("LC Classes", "N/A")
+            st.metric(METRIC_TITLE, f"{df['Weight'].sum():,}")
         
-        # Settings in sidebar
+        # Dynamically display the first two available filter metrics
+        filter_keys_available = [key for key, col in FILTER_COLS.items() if col in df.columns]
+
+        with col3:
+            if len(filter_keys_available) >= 1:
+                key = filter_keys_available[0]
+                st.metric(f"Unique {key}s", df[FILTER_COLS[key]].nunique())
+            else:
+                st.metric("Filter 1", "N/A")
+
+        with col4:
+            if len(filter_keys_available) >= 2:
+                key = filter_keys_available[1]
+                st.metric(f"Unique {key}s", df[FILTER_COLS[key]].nunique())
+            else:
+                st.metric("Filter 2", "N/A")
+
+        # --- Settings in sidebar ---
         with st.sidebar:
-            st.header("⚙️ Filter Data")
+            st.subheader("Filter & Visualize")
             
-            # --- Location Filter (always present if column exists) ---
-            selected_locations = None
-            if has_location:
-                locations = sorted(df['Location Name'].dropna().unique())
-                selected_locations = st.multiselect(
-                    "Filter by Location(s)",
-                    locations,
-                    # Default to selecting all locations
-                    default=locations,  
-                    help="Select one or more locations to include in the analysis."
-                )
+            analysis_options = ["Overall Collection"]
             
-            # --- LC Classification Filter (always present if column exists) ---
-            selected_lc_codes = None
-            if has_lc:
-                lc_codes = sorted(df['LC Classification Code'].dropna().unique())
-                selected_lc_codes = st.multiselect(
-                    "Filter by LC Class(es)",
-                    lc_codes,
-                    # Default to selecting all LC codes
-                    default=lc_codes,  
-                    help="Select one or more LC classifications to include in the analysis."
-                )
+            # Add available filters based on data type and column presence
+            available_filters = {}
+            for key, col in FILTER_COLS.items():
+                if col in df.columns:
+                    analysis_options.append(f"By {key}")
+                    available_filters[key] = col
+            
+            analysis_type = st.selectbox(
+                "Analysis Type",
+                analysis_options,
+                help="Choose how to filter your data"
+            )
+            
+            selected_items = None
+            filter_col_name = None
+            
+            if analysis_type != "Overall Collection":
+                filter_key = analysis_type.replace("By ", "")
+                filter_col_name = available_filters.get(filter_key)
+                
+                if filter_col_name:
+                    options = sorted(df[filter_col_name].dropna().unique())
+                    selected_items = st.multiselect(
+                        f"Select {filter_key}(s)",
+                        options,
+                        default=options
+                    )
+                else:
+                    st.warning(f"Filter column for {filter_key} not found.")
 
             st.markdown("---")
             
             # Word cloud settings
-            st.header("⚙️ Word Cloud Settings")
-            
-            # Added keys to widgets to prevent warnings if they are conditionally displayed
-            max_words = st.slider(
-                "Maximum words",
-                min_value=20,
-                max_value=200,
-                value=100,
-                step=10,
-                key='max_words_slider',
-                help="Number of words to show in the cloud"
-            )
-            
-            min_word_length = st.slider(
-                "Minimum word length",
-                min_value=1,
-                max_value=10,
-                value=3,
-                key='min_len_slider',
-                help="Filter out short words"
-            )
-            
+            st.subheader("Word Cloud Settings")
+            max_words = st.slider("Maximum words", 20, 200, 100, 10)
+            min_word_length = st.slider("Minimum word length", 1, 10, 3)
             color_scheme = st.selectbox(
                 "Color scheme",
-                ["viridis", "plasma", "inferno", "magma", "cividis", "twilight", "rainbow"],
-                key='color_scheme_select',
-                help="Choose the color palette"
+                ["viridis", "plasma", "inferno", "magma", "cividis", "twilight", "rainbow"]
             )
             
             # Display options
             st.markdown("---")
             st.subheader("Display Options")
-            show_table = st.checkbox("Show frequency table", value=True, key='show_table_chk')
-            show_bar = st.checkbox("Show bar chart", value=True, key='show_bar_chk')
-            top_n = st.slider("Top N terms for bar chart", 10, 50, 20, key='top_n_slider')
+            show_table = st.checkbox("Show frequency table", value=True)
+            show_bar = st.checkbox("Show bar chart", value=True)
+            top_n = st.slider("Top N terms for bar chart", 10, 50, 20)
         
-        # ------------------------------------------------------------------------------------------------
-        # FIX INTEGRATION: 2. Button runs analysis AND stores results in session state
+        # Generate button
         if st.button("🎨 Generate Word Cloud", type="primary", use_container_width=True):
             
-            filtered_df = df.copy()
-            title_parts = []
+            # --- Filtering Logic ---
+            filtered_df = df
+            title_suffix = f"{data_type} - Entire Collection"
             
-            # 1. Apply Location Filter
-            if has_location and selected_locations:
-                filtered_df = filtered_df[filtered_df['Location Name'].isin(selected_locations)]
-                if len(selected_locations) < len(df['Location Name'].dropna().unique()):
-                    display_list = selected_locations[:2]
-                    title_parts.append(f"Locations: {', '.join(display_list)}{'...' if len(selected_locations) > 2 else ''} ({len(selected_locations)} locs)")
-
-            # 2. Apply LC Classification Filter
-            if has_lc and selected_lc_codes:
-                filtered_df = filtered_df[filtered_df['LC Classification Code'].isin(selected_lc_codes)]
-                if len(selected_lc_codes) < len(df['LC Classification Code'].dropna().unique()):
-                    display_codes = [f"{c}" for c in selected_lc_codes]
-                    title_parts.append(f"LC Classes: {', '.join(display_codes[:2])}{'...' if len(selected_lc_codes) > 2 else ''} ({len(selected_lc_codes)} classes)")
-
-            # Determine the final title suffix
-            if title_parts:
-                title_suffix = " | ".join(title_parts)
-            else:
-                title_suffix = "Entire Collection"
-
+            if analysis_type != "Overall Collection" and selected_items and filter_col_name:
+                # Use isin() to filter for multiple selections
+                filtered_df = df[df[filter_col_name].isin(selected_items)]
+                
+                # Create a concise title suffix
+                display_list = selected_items[:2]
+                filter_key = analysis_type.replace("By ", "")
+                title_suffix = f"{data_type} - {filter_key}: {', '.join(display_list)}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
+            
             # Check if any data remains after filtering
             if filtered_df.empty:
-                st.session_state.analysis_data = 'EMPTY' # Signal no data
-                st.warning("No data found for the selected combination of Location(s) and LC Classification(s). Please adjust your selection.")
+                st.warning(f"No data found for the selected filter(s). Please adjust your selection.")
                 return
 
             # Process subjects
@@ -349,77 +343,42 @@ def main():
                 all_subjects = Counter()
                 for _, row in filtered_df.iterrows():
                     if pd.notna(row['Subjects']):
-                        subjects_weighted = process_subjects(row['Subjects'], row['Loans'])
+                        # Use the calculated 'Weight' column
+                        subjects_weighted = process_subjects(row['Subjects'], row['Weight'])
                         all_subjects.update(subjects_weighted)
             
             if not all_subjects:
-                st.session_state.analysis_data = 'EMPTY'
                 st.warning("No subject data found for this selection.")
                 return
-            
-            # STORE THE RESULTS (State update forces a rerun)
-            st.session_state.analysis_data = {
-                'all_subjects': all_subjects, # The Counter object is stored
-                'title_suffix': title_suffix,
-                'min_word_length': min_word_length,
-                'max_words': max_words,
-                'color_scheme': color_scheme,
-                'top_n': top_n,
-                # Store the current display settings as well
-                'show_table': show_table, 
-                'show_bar': show_bar
-            }
-        
-        # ------------------------------------------------------------------------------------------------
-        # FIX INTEGRATION: 3. Display section is now OUTSIDE the button logic
-        if st.session_state.analysis_data == 'EMPTY':
-            # Handle empty data case
-            pass
-        elif st.session_state.analysis_data is not None:
-            
-            # Retrieve stored data and current display settings
-            data = st.session_state.analysis_data
-            all_subjects = data['all_subjects']
-            title_suffix = data['title_suffix']
-            max_words = data['max_words']
-            min_word_length = data['min_word_length']
-            color_scheme = data['color_scheme']
-            
-            # Use current sidebar values for display options, as they can change without clicking the button
-            show_table = st.session_state['show_table_chk']
-            show_bar = st.session_state['show_bar_chk']
-            top_n = st.session_state['top_n_slider']
             
             # Generate word cloud
             st.markdown("---")
             st.subheader(f"☁️ Word Cloud - {title_suffix}")
             
-            wordcloud = generate_wordcloud(
-                dict(all_subjects),
-                min_word_length,
-                max_words,
-                color_scheme
-            )
+            wordcloud = WordCloud(
+                width=1200, height=600, background_color='white', colormap=color_scheme,
+                max_words=max_words, relative_scaling=0.5, min_font_size=10, prefer_horizontal=0.7
+            ).generate_from_frequencies(dict(all_subjects))
             
-            if wordcloud:
-                fig, ax = plt.subplots(figsize=(15, 8))
-                ax.imshow(wordcloud, interpolation='bilinear')
-                ax.axis('off')
-                ax.set_title(f'Subject Terms - {title_suffix}\n(Weighted by Checkouts)', 
-                                fontsize=16, fontweight='bold', pad=20)
-                st.pyplot(fig)
-                
-                # Download button for word cloud
-                img_buffer = BytesIO()
-                fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
-                img_buffer.seek(0)
-                
-                st.download_button(
-                    label="📥 Download Word Cloud (PNG)",
-                    data=img_buffer,
-                    file_name=f"wordcloud_{title_suffix.replace(' ', '_').replace('/', '_')}.png",
-                    mime="image/png"
-                )
+            # Plotting the word cloud
+            fig, ax = plt.subplots(figsize=(15, 8))
+            ax.imshow(wordcloud, interpolation='bilinear')
+            ax.axis('off')
+            ax.set_title(f'Subject Terms - {title_suffix}\n(Weighted by {METRIC_UNIT})', 
+                        fontsize=16, fontweight='bold', pad=20)
+            st.pyplot(fig)
+            
+            # Download button for word cloud
+            img_buffer = BytesIO()
+            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
+            img_buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Download Word Cloud (PNG)",
+                data=img_buffer,
+                file_name=f"wordcloud_{title_suffix.replace(' ', '_').replace('/', '_')}.png",
+                mime="image/png"
+            )
             
             # Bar chart
             if show_bar:
@@ -437,7 +396,7 @@ def main():
                     color='Count',
                     color_continuous_scale=color_scheme,
                     title=f'Top {top_n} Subject Terms - {title_suffix}',
-                    labels={'Count': 'Weighted Count', 'Term': 'Subject Term'}
+                    labels={'Count': f'Weighted Count ({METRIC_UNIT})', 'Term': 'Subject Term'}
                 )
                 
                 fig.update_layout(
@@ -459,12 +418,9 @@ def main():
                 freq_df['Rank'] = range(1, len(freq_df) + 1)
                 freq_df = freq_df[['Rank', 'Subject Term', 'Weighted Count']]
                 
-                # Add search box (Crucial placement: outside the button block)
-                # Added a key to ensure its state is isolated
-                search = st.text_input("🔍 Search terms:", "", key="table_search_input")
-                
+                # Add search box
+                search = st.text_input("🔍 Search terms:", "", key='search_table')
                 if search:
-                    # Search filter logic runs on every rerun (including when 'search' changes)
                     freq_df = freq_df[freq_df['Subject Term'].str.contains(search, case=False, na=False)]
                 
                 # Display with pagination
@@ -493,7 +449,6 @@ def main():
                 - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f}
                 """)
     
-    # --- The following 'else' block runs when no file is uploaded ---
     else:
         # Define the requirements content for download
         requirements_content = """
@@ -530,39 +485,35 @@ plotly
             )
             
         with st.expander("📖 How to use this tool", expanded=True):
-            st.markdown("""
-            ### Step 1: Prepare your CSV file
-            Your CSV file should contain at minimum:
-            - **Subjects** column (required): Subject terms separated by semicolons
-            - **Location Name** column (optional): Physical location of items
-            - **LC Classification Code** column (optional): Library classification codes
-            - **Loans** or similar column (optional): Number of checkouts
-            - **Tulane University Librarians can access this data through the Alma Physical Usage tool: https://tulane.alma.exlibrisgroup.com/ng/hashed/B3E6716BB3B96E212F095B0481A99FB9A3066DB7**
+            st.markdown(f"""
+            ### Step 1: Select Data Type and Prepare CSV
+            Use the sidebar to choose **Physical**, **Digital (Local)**, or **COUNTER Reports**.
+            
+            #### Required Columns
+            - **All Types:** `Subjects` (terms separated by semicolons)
+            - **Physical:** A column for **Loans** or **Checkouts** (for weighting)
+            - **Digital (Local):** Columns for **Downloads** or **Views** (for weighting)
+            - **COUNTER:** A column like **Total_Item_Requests** or **Unique_Item_Requests**
+            
+            #### Optional Columns (for filtering)
+            - **Physical:** `Location Name` and `LC Classification Code`
+            - **Digital (Local):** `Name of file` and `Collection Name`
+            - **COUNTER:** `Title`, **Platform**, and **Publisher**
             
             ### Step 2: Upload your file
-            - Click the upload area above or drag and drop your CSV file
-            - The tool will automatically detect the columns
+            - Click the upload area above or drag and drop your CSV file.
             
             ### Step 3: Configure settings
-            - **Use the sidebar to apply combined filters for Location(s) and LC Classification(s).**
-            - Adjust word cloud settings in the sidebar
-            - Select display options
+            - Choose analysis type (Overall or filtered by an available category)
+            - **Note:** All filtering options now support selecting **multiple** items.
             
             ### Step 4: Generate visualizations
-            - Click the "Generate Word Cloud" button
-            - View and download your word cloud
-            - Explore the frequency data
-            
-            ### Step 5: Export results
-            - Download the word cloud as PNG
-            - Export frequency data as CSV
-            - Use for reports, presentations, or further analysis
-            
-            **Pro Tip:** Use the multi-select feature to compare usage trends between two similar branches or across a few key LC subjects!
+            - Click the "Generate Word Cloud" button to see the results.
             """)
-            
-        with st.expander("📊 Sample data format"):
-            sample_data = pd.DataFrame({
+        
+        with st.expander("📊 Sample Data Structure"):
+            st.markdown("#### Physical Collections Sample")
+            sample_physical = pd.DataFrame({
                 'Title': ['Book 1', 'Book 2', 'Book 3'],
                 'Location Name': ['Main Library', 'Branch A', 'Main Library'],
                 'LC Classification Code': ['PQ', 'F', 'HT'],
@@ -571,51 +522,83 @@ plotly
                     'History; Mexico - Antiquities; Indigenous peoples',
                     'Social sciences; Communities; Urban studies'
                 ],
-                'Loans (In House + Not In House)': [3, 2, 5],
-                'Loan Year': [2024, 2024, 2023]
+                'Loans (Total)': [3, 2, 5]
             })
-            st.dataframe(sample_data, use_container_width=True)
+            st.dataframe(sample_physical, use_container_width=True)
+
+            st.markdown("#### Digital Collections (Local) Sample")
+            sample_digital = pd.DataFrame({
+                'Title': ['Report A', 'Image B', 'Video C'],
+                'Name of file': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'],
+                'Collection Name': ['Institutional Repository', 'Digital Archives', 'Institutional Repository'], 
+                'URL': ['http://...', 'http://...', 'http://...'],
+                'Subjects': [
+                    'Finance; Economics; Corporate culture',
+                    'Local history; Architecture; 1950s',
+                    'Oral history; Interviews; Civil rights'
+                ],
+                'Downloads': [120, 50, 0],
+                'Views': [500, 200, 800]
+            })
+            st.dataframe(sample_digital, use_container_width=True)
+
+            st.markdown("#### COUNTER Reports (e-resources) Sample")
+            sample_counter = pd.DataFrame({
+                'Title': ['Journal X', 'Ebook Y', 'Database Z'],
+                'Platform': ['Wiley', 'EBSCO', 'ProQuest'],
+                'Publisher': ['Wiley Inc.', 'EBSCO Publishing', 'ProQuest LLC'],
+                'Subjects': [
+                    'Science; Chemistry; Research methods',
+                    'Sociology; Anthropology; Global studies',
+                    'Computer science; Data mining'
+                ],
+                'Total_Item_Requests': [1500, 800, 12000],
+                'Unique_Item_Requests': [500, 200, 5000]
+            })
+            st.dataframe(sample_counter, use_container_width=True)
             
-            # Download sample
-            csv = sample_data.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Sample CSV",
-                data=csv,
-                file_name="sample_library_data.csv",
-                mime="text/csv"
-            )
-            
+            # Download sample buttons
+            col_p, col_d, col_c = st.columns(3)
+            with col_p:
+                csv_p = sample_physical.to_csv(index=False)
+                st.download_button(
+                    label="📥 Physical Sample CSV",
+                    data=csv_p,
+                    file_name="sample_physical_data.csv",
+                    mime="text/csv"
+                )
+            with col_d:
+                csv_d = sample_digital.to_csv(index=False)
+                st.download_button(
+                    label="📥 Digital Local Sample CSV",
+                    data=csv_d,
+                    file_name="sample_digital_data.csv",
+                    mime="text/csv"
+                )
+            with col_c:
+                csv_c = sample_counter.to_csv(index=False)
+                st.download_button(
+                    label="📥 COUNTER Sample CSV",
+                    data=csv_c,
+                    file_name="sample_counter_data.csv",
+                    mime="text/csv"
+                )
+        
         with st.expander("❓ Frequently Asked Questions"):
             st.markdown("""
-            **Q: What file format is required?**
-            A: CSV (Comma-Separated Values) format. You can export this from Excel, Google Sheets, or your library system.
+            **Q: How is the weighting calculated?**
+            A: It uses the most relevant usage column found: Loans (Physical), Downloads/Views (Digital Local), or Total/Unique Requests (COUNTER). If no usage column is found, it defaults to counting the number of records.
             
-            **Q: How are the word sizes determined?**
-            A: Word size is based on the frequency of subject terms, weighted by the number of checkouts.
-            
-            **Q: Can I use this with any library system?**
-            A: Yes! As long as you can export your data to CSV format with a Subjects column.
-            
-            **Q: Is my data secure?**
-            A: Your data is processed entirely in your browser (or on your server if self-hosted). Nothing is saved permanently.
-            
-            **Q: How many records can it handle?**
-            A: The tool can handle thousands of records. For very large datasets (>50,000 records), processing may take longer.
-            
-            **Q: Can I customize the colors?**
-            A: Yes! Use the sidebar to select from various color schemes.
-            
-            **Q: What if my subjects aren't separated by semicolons?**
-            A: Currently, the tool expects semicolons. You can pre-process your data in Excel to replace other separators with semicolons.
+            **Q: Can I analyze data from different types together?**
+            A: You must upload one file type at a time. The reports can then be compared manually.
             """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Subject Analysis Tool for Physical Checkout Data v1.0 | Built with Streamlit | Built with assistance from Claude AI</p>
-            <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
-            <p> Non-Tulane affiliates are welcome to use this tool or copy it to be used as a separate tool. </p>
+            <p>Library Word Cloud Generator v4.0 | Built with Streamlit</p>
+            <p>For support, contact your library data team</p>
         </div>
         """, unsafe_allow_html=True)
 
