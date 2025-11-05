@@ -609,8 +609,8 @@ plotly
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v4.2 | Built with Streamlit</p>
-            <p>For support, contact your library data team</p>
+            <p>Library Word Cloud Generator v4.2 | Built with Streamlit and assistance from Claude AI and Gemini AI</p>
+            <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
         </div>
         """, unsafe_allow_html=True)
 
