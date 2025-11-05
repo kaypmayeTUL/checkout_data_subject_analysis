@@ -255,8 +255,8 @@ def main():
             if has_lc:
                 analysis_options.append("By LC Classification")
             
-            analysis_type = st.selectbox(
-                "Analysis Type",
+            analysis_type = st.selectbox
+                ("Analysis Type",
                 analysis_options,
                 help="Choose how to analyze your data"
             )
@@ -443,9 +443,40 @@ def main():
                 """)
     
     else:
-        # Show instructions when no file is uploaded
+        # Define the requirements content for download
+        requirements_content = """
+streamlit
+pandas
+numpy
+wordcloud
+matplotlib
+plotly
+"""
+        
+        # Show setup instructions when no file is uploaded
         st.markdown("---")
         
+        with st.expander("⚠️ **Setup and Dependencies**", expanded=True):
+            st.markdown("""
+            ### 1. Resolve Module Errors (Like 'wordcloud' not found)
+            If you encounter a `ModuleNotFoundError` (like the one you experienced), you need to **install the necessary Python libraries**.
+            
+            **Run this command in your terminal/command prompt:**
+            ```bash
+            pip install streamlit pandas numpy wordcloud matplotlib plotly
+            ```
+            
+            **For Streamlit Cloud deployment**, use the `requirements.txt` file below to list dependencies.
+            """)
+            
+            # Download button for requirements.txt
+            st.download_button(
+                label="📥 Download requirements.txt",
+                data=requirements_content,
+                file_name="requirements.txt",
+                mime="text/plain"
+            )
+            
         with st.expander("📖 How to use this tool", expanded=True):
             st.markdown("""
             ### Step 1: Prepare your CSV file
