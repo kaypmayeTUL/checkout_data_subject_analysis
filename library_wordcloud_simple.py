@@ -499,7 +499,7 @@ plotly
             - **Location Name** column (optional): Physical location of items
             - **LC Classification Code** column (optional): Library classification codes
             - **Loans** or similar column (optional): Number of checkouts
-            - **Tulane University Libraians can access this data through the Alma Physical Usage tool.**
+            - **Tulane University Librarians can access this data through the Alma Physical Usage tool.**
             
             ### Step 2: Upload your file
             - Click the upload area above or drag and drop your CSV file
@@ -578,6 +578,7 @@ plotly
         <div style='text-align: center; color: #666;'>
             <p>Subject Analysis Tool for Physical Checkout Data v1.0 | Built with Streamlit | Built with assistance from Claude AI</p>
             <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
+            <p> Non-Tulane affiliates are welcome to use this tool or copy it to be used as a separate tool. </p>
         </div>
         """, unsafe_allow_html=True)
 
