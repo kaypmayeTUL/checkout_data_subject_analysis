@@ -256,7 +256,7 @@ def main():
                 analysis_options.append("By LC Classification")
             
             analysis_type = st.selectbox
-                ("Analysis Type",
+            ("Analysis Type",
                 analysis_options,
                 help="Choose how to analyze your data"
             )
