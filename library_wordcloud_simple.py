@@ -1,8 +1,3 @@
-"""
-Subject Analysis Tool for Physical Checkout Data - Combined Filter Version
-Upload your CSV file and instantly generate word clouds and frequency tables.
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -135,7 +130,7 @@ def generate_wordcloud(word_freq, min_word_length=3, max_words=100, colormap='vi
     
     # Filter short words
     filtered_freq = {word: freq for word, freq in word_freq.items() 
-                     if len(word) >= min_word_length}
+                      if len(word) >= min_word_length}
     
     if not filtered_freq:
         return None
@@ -166,6 +161,12 @@ def main():
     st.title("📚 Subject Analysis Tool for Physical Checkout Data | Tulane University Libraries")
     st.markdown("### Upload your CSV file and instantly generate word clouds and frequency tables.")
     
+    # ------------------------------------------------------------------------------------------------
+    # FIX INTEGRATION: 1. Initialize session state
+    # This dictionary will store the results of the analysis when the button is pressed.
+    if 'analysis_data' not in st.session_state:
+        st.session_state.analysis_data = None
+        
     # Create columns for layout
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -202,7 +203,6 @@ def main():
         df.columns = df.columns.str.strip()
         
         # Check for required columns
-        required_cols = ['Subjects']
         has_location = 'Location Name' in df.columns
         has_lc = 'LC Classification Code' in df.columns
         
@@ -256,7 +256,7 @@ def main():
                     "Filter by Location(s)",
                     locations,
                     # Default to selecting all locations
-                    default=locations, 
+                    default=locations,  
                     help="Select one or more locations to include in the analysis."
                 )
             
@@ -268,7 +268,7 @@ def main():
                     "Filter by LC Class(es)",
                     lc_codes,
                     # Default to selecting all LC codes
-                    default=lc_codes, 
+                    default=lc_codes,  
                     help="Select one or more LC classifications to include in the analysis."
                 )
 
@@ -277,12 +277,14 @@ def main():
             # Word cloud settings
             st.header("⚙️ Word Cloud Settings")
             
+            # Added keys to widgets to prevent warnings if they are conditionally displayed
             max_words = st.slider(
                 "Maximum words",
                 min_value=20,
                 max_value=200,
                 value=100,
                 step=10,
+                key='max_words_slider',
                 help="Number of words to show in the cloud"
             )
             
@@ -291,23 +293,26 @@ def main():
                 min_value=1,
                 max_value=10,
                 value=3,
+                key='min_len_slider',
                 help="Filter out short words"
             )
             
             color_scheme = st.selectbox(
                 "Color scheme",
                 ["viridis", "plasma", "inferno", "magma", "cividis", "twilight", "rainbow"],
+                key='color_scheme_select',
                 help="Choose the color palette"
             )
             
             # Display options
             st.markdown("---")
             st.subheader("Display Options")
-            show_table = st.checkbox("Show frequency table", value=True)
-            show_bar = st.checkbox("Show bar chart", value=True)
-            top_n = st.slider("Top N terms for bar chart", 10, 50, 20)
+            show_table = st.checkbox("Show frequency table", value=True, key='show_table_chk')
+            show_bar = st.checkbox("Show bar chart", value=True, key='show_bar_chk')
+            top_n = st.slider("Top N terms for bar chart", 10, 50, 20, key='top_n_slider')
         
-        # Generate button
+        # ------------------------------------------------------------------------------------------------
+        # FIX INTEGRATION: 2. Button runs analysis AND stores results in session state
         if st.button("🎨 Generate Word Cloud", type="primary", use_container_width=True):
             
             filtered_df = df.copy()
@@ -315,8 +320,6 @@ def main():
             
             # 1. Apply Location Filter
             if has_location and selected_locations:
-                # Apply filter regardless of whether all are selected, 
-                # but only update the title if it's a subset
                 filtered_df = filtered_df[filtered_df['Location Name'].isin(selected_locations)]
                 if len(selected_locations) < len(df['Location Name'].dropna().unique()):
                     display_list = selected_locations[:2]
@@ -337,6 +340,7 @@ def main():
 
             # Check if any data remains after filtering
             if filtered_df.empty:
+                st.session_state.analysis_data = 'EMPTY' # Signal no data
                 st.warning("No data found for the selected combination of Location(s) and LC Classification(s). Please adjust your selection.")
                 return
 
@@ -349,8 +353,42 @@ def main():
                         all_subjects.update(subjects_weighted)
             
             if not all_subjects:
+                st.session_state.analysis_data = 'EMPTY'
                 st.warning("No subject data found for this selection.")
                 return
+            
+            # STORE THE RESULTS (State update forces a rerun)
+            st.session_state.analysis_data = {
+                'all_subjects': all_subjects, # The Counter object is stored
+                'title_suffix': title_suffix,
+                'min_word_length': min_word_length,
+                'max_words': max_words,
+                'color_scheme': color_scheme,
+                'top_n': top_n,
+                # Store the current display settings as well
+                'show_table': show_table, 
+                'show_bar': show_bar
+            }
+        
+        # ------------------------------------------------------------------------------------------------
+        # FIX INTEGRATION: 3. Display section is now OUTSIDE the button logic
+        if st.session_state.analysis_data == 'EMPTY':
+            # Handle empty data case
+            pass
+        elif st.session_state.analysis_data is not None:
+            
+            # Retrieve stored data and current display settings
+            data = st.session_state.analysis_data
+            all_subjects = data['all_subjects']
+            title_suffix = data['title_suffix']
+            max_words = data['max_words']
+            min_word_length = data['min_word_length']
+            color_scheme = data['color_scheme']
+            
+            # Use current sidebar values for display options, as they can change without clicking the button
+            show_table = st.session_state['show_table_chk']
+            show_bar = st.session_state['show_bar_chk']
+            top_n = st.session_state['top_n_slider']
             
             # Generate word cloud
             st.markdown("---")
@@ -368,7 +406,7 @@ def main():
                 ax.imshow(wordcloud, interpolation='bilinear')
                 ax.axis('off')
                 ax.set_title(f'Subject Terms - {title_suffix}\n(Weighted by Checkouts)', 
-                            fontsize=16, fontweight='bold', pad=20)
+                                fontsize=16, fontweight='bold', pad=20)
                 st.pyplot(fig)
                 
                 # Download button for word cloud
@@ -421,9 +459,12 @@ def main():
                 freq_df['Rank'] = range(1, len(freq_df) + 1)
                 freq_df = freq_df[['Rank', 'Subject Term', 'Weighted Count']]
                 
-                # Add search box
-                search = st.text_input("🔍 Search terms:", "")
+                # Add search box (Crucial placement: outside the button block)
+                # Added a key to ensure its state is isolated
+                search = st.text_input("🔍 Search terms:", "", key="table_search_input")
+                
                 if search:
+                    # Search filter logic runs on every rerun (including when 'search' changes)
                     freq_df = freq_df[freq_df['Subject Term'].str.contains(search, case=False, na=False)]
                 
                 # Display with pagination
@@ -452,6 +493,7 @@ def main():
                 - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f}
                 """)
     
+    # --- The following 'else' block runs when no file is uploaded ---
     else:
         # Define the requirements content for download
         requirements_content = """
@@ -542,7 +584,7 @@ plotly
                 file_name="sample_library_data.csv",
                 mime="text/csv"
             )
-        
+            
         with st.expander("❓ Frequently Asked Questions"):
             st.markdown("""
             **Q: What file format is required?**
