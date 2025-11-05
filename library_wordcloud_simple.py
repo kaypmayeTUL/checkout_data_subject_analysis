@@ -255,8 +255,9 @@ def main():
             if has_lc:
                 analysis_options.append("By LC Classification")
             
-            analysis_type = st.selectbox
-            ("Analysis Type",
+            # FIX APPLIED HERE: The ( was missing after st.selectbox
+            analysis_type = st.selectbox(
+                "Analysis Type",
                 analysis_options,
                 help="Choose how to analyze your data"
             )
@@ -459,7 +460,7 @@ plotly
         with st.expander("⚠️ **Setup and Dependencies**", expanded=True):
             st.markdown("""
             ### 1. Resolve Module Errors (Like 'wordcloud' not found)
-            If you encounter a `ModuleNotFoundError` (like the one you experienced), you need to **install the necessary Python libraries**.
+            If you encounter a `ModuleNotFoundError`, you need to **install the necessary Python libraries**.
             
             **Run this command in your terminal/command prompt:**
             ```bash
