@@ -112,15 +112,15 @@ def process_subjects(subjects_str, weight):
 def main():
     
     # Header
-    st.title("📚 Library Collection Subject Analyzer")
-    st.markdown("### Upload your library data (Physical, Digital, or COUNTER) to analyze subject trends.")
+    st.title("📚 Library Collection Use/Subject Analyzer (TUL)")
+    st.markdown("### Upload your use (Physical, Digital, or COUNTER) to analyze subject trends.")
     
     # Data Type Selection (First step in sidebar)
     with st.sidebar:
         st.header("⚙️ Data Source")
         data_type = st.radio(
             "Select Data Collection Type:",
-            ['Physical Collections', 'Digital Collections (Local)', 'COUNTER Reports (e-resources)'],
+            ['Physical Collections', 'Digital Collections (Tulane Digitial Library)', 'COUNTER Reports (e-resources)'],
             index=0,
             help="This determines the required columns and usage metric."
         )
@@ -135,7 +135,7 @@ def main():
             'Location': ['Location Name'],
             'LC Classification': ['LC Classification Code']
         }
-    elif data_type == 'Digital Collections (Local)':
+    elif data_type == 'Digital Collections (Tulane Digital Libraries)':
         WEIGHT_COL_ALIASES = ['Downloads', 'Views', 'Digital File Downloads', 'Digital File Views']
         METRIC_TITLE = "Total Usage (D/V)"
         METRIC_UNIT = "Views + Downloads"
@@ -201,8 +201,8 @@ def main():
                 weight_col = alias
                 break
         
-        # Scenario 1: Digital Collections (Local) - Needs combined D/V logic if no single weight col found
-        if data_type == 'Digital Collections (Local)' and not weight_col:
+        # Scenario 1: Digital Collections (Tulane Digital Libraries) - Needs combined D/V logic if no single weight col found
+        if data_type == 'Digital Collections (Tulane Digital Libraries)' and not weight_col:
             # Check for all possible Downloads/Views permutations
             has_downloads = any(alias in df.columns for alias in ['Downloads', 'Digital File Downloads'])
             has_views = any(alias in df.columns for alias in ['Views', 'Digital File Views'])
@@ -281,7 +281,7 @@ def main():
 
         # --- Settings in sidebar ---
         with st.sidebar:
-            st.subheader("⬇️ Filter Data (Combine with AND logic)")
+            st.subheader("⬇️ Filter Data")
             
             # Dictionary to hold user selections from all filters
             filter_selections = {}
@@ -538,7 +538,7 @@ plotly
             })
             st.dataframe(sample_physical, use_container_width=True)
 
-            st.markdown("#### Digital Collections (Local) Sample (Using your column names)")
+            st.markdown("#### Digital Collections (Tulane Digital Libraries) Sample (Using your column names)")
             sample_digital = pd.DataFrame({
                 'Title': ['Report A', 'Image B', 'Video C'],
                 'File Name': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'], 
