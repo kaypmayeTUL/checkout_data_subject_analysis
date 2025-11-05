@@ -113,7 +113,7 @@ def main():
     
     # Header
     st.title("📚 Library Collection Use/Subject Analyzer (TUL)")
-    st.markdown("### Upload your use (Physical, Digital, or COUNTER) to analyze subject trends.")
+    st.markdown("### Select your data type on the left (Physical, Digital, or COUNTER) and upload your use to analyze subject trends.")
     
     # Data Type Selection (First step in sidebar)
     with st.sidebar:
