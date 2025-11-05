@@ -112,8 +112,8 @@ def process_subjects(subjects_str, weight):
 def main():
     
     # Header
-    st.title("📚 Library Collection Subject Analyzer")
-    st.markdown("### Upload your usage data (Physical, Digital, or COUNTER) to analyze subject trends.")
+    st.title("📚 Library Collection Subject Analyzer | Tulane University Libraries")
+    st.markdown("### Upload your library data (Physical, Digital, or COUNTER) to analyze subject trends.")
     
     # Data Type Selection (First step in sidebar)
     with st.sidebar:
@@ -136,21 +136,23 @@ def main():
             'LC Classification': 'LC Classification Code'
         }
     elif data_type == 'Digital Collections (Local)':
-        WEIGHT_COL_ALIASES = ['Downloads', 'Views']
+        # Updated to include common export names like 'Digital File Views' and 'File Name'
+        WEIGHT_COL_ALIASES = ['Downloads', 'Views', 'Digital File Downloads', 'Digital File Views']
         METRIC_TITLE = "Total Usage (D/V)"
         METRIC_UNIT = "Views + Downloads"
         FILTER_COLS = {
-            'Resource Name': 'Name of file',
-            'Collection Name': 'Collection Name'
+            # Use a list of aliases for filter columns and we will find the match later
+            'Resource Name': ['Name of file', 'File Name'], 
+            'Collection Name': ['Collection Name']
         }
     else: # COUNTER Reports (e-resources)
         WEIGHT_COL_ALIASES = ['Total_Item_Requests', 'Unique_Item_Requests', 'Total_Requests', 'Searches_Platform']
         METRIC_TITLE = "Total Usage (COUNTER)"
         METRIC_UNIT = "Requests"
         FILTER_COLS = {
-            'Title': 'Title',
-            'Platform': 'Platform',
-            'Publisher': 'Publisher'
+            'Title': ['Title'],
+            'Platform': ['Platform'],
+            'Publisher': ['Publisher']
         }
 
     # Upload section
@@ -194,25 +196,32 @@ def main():
             return
 
         weight_col = None
-        # Try to find a specific weight column based on alias list
-        current_aliases = WEIGHT_COL_ALIASES
-        for alias in current_aliases:
+        
+        # 1. Find the weight column by checking all aliases
+        for alias in WEIGHT_COL_ALIASES:
             if alias in df.columns:
                 weight_col = alias
                 break
         
         # Scenario 1: Digital Collections (Local) - Needs combined D/V logic if no single weight col found
         if data_type == 'Digital Collections (Local)' and not weight_col:
-            has_downloads = 'Downloads' in df.columns
-            has_views = 'Views' in df.columns
+            # Check for all possible Downloads/Views permutations
+            has_downloads = any(alias in df.columns for alias in ['Downloads', 'Digital File Downloads'])
+            has_views = any(alias in df.columns for alias in ['Views', 'Digital File Views'])
             
             if has_downloads or has_views:
-                if has_downloads: df['Downloads'] = pd.to_numeric(df['Downloads'], errors='coerce').fillna(0)
-                if has_views: df['Views'] = pd.to_numeric(df['Views'], errors='coerce').fillna(0)
                 
-                weight_val = (df['Downloads'] if has_downloads else 0) + (df['Views'] if has_views else 0)
-                df['Weight'] = weight_val
+                # Identify the actual download/view column names present in the file
+                actual_dl_col = next((c for c in ['Downloads', 'Digital File Downloads'] if c in df.columns), None)
+                actual_view_col = next((c for c in ['Views', 'Digital File Views'] if c in df.columns), None)
                 
+                # Convert to numeric and calculate weight
+                dl_val = pd.to_numeric(df[actual_dl_col], errors='coerce').fillna(0) if actual_dl_col else 0
+                view_val = pd.to_numeric(df[actual_view_col], errors='coerce').fillna(0) if actual_view_col else 0
+                
+                df['Weight'] = dl_val + view_val
+                
+                # Set metric title
                 final_metric = ("Downloads" if has_downloads else "") + (" + " if has_downloads and has_views else "") + ("Views" if has_views else "")
                 METRIC_TITLE = f"Total Usage ({final_metric})"
                 METRIC_UNIT = final_metric
@@ -236,6 +245,15 @@ def main():
         # Ensure numeric conversion for the final metric calculation
         df['Weight'] = pd.to_numeric(df['Weight'], errors='coerce').fillna(0)
 
+        # Map filter keys to the actual column names present in the dataframe
+        actual_filter_cols = {}
+        for key, aliases in FILTER_COLS.items():
+            if isinstance(aliases, str): aliases = [aliases] # Handle single string definitions
+            for alias in aliases:
+                if alias in df.columns:
+                    actual_filter_cols[key] = alias
+                    break
+        
         # Display data overview
         st.markdown("---")
         st.subheader("📊 Data Overview")
@@ -247,19 +265,19 @@ def main():
             st.metric(METRIC_TITLE, f"{df['Weight'].sum():,}")
         
         # Dynamically display the first two available filter metrics
-        filter_keys_available = [key for key, col in FILTER_COLS.items() if col in df.columns]
+        filter_keys_available = list(actual_filter_cols.keys())
 
         with col3:
             if len(filter_keys_available) >= 1:
                 key = filter_keys_available[0]
-                st.metric(f"Unique {key}s", df[FILTER_COLS[key]].nunique())
+                st.metric(f"Unique {key}s", df[actual_filter_cols[key]].nunique())
             else:
                 st.metric("Filter 1", "N/A")
 
         with col4:
             if len(filter_keys_available) >= 2:
                 key = filter_keys_available[1]
-                st.metric(f"Unique {key}s", df[FILTER_COLS[key]].nunique())
+                st.metric(f"Unique {key}s", df[actual_filter_cols[key]].nunique())
             else:
                 st.metric("Filter 2", "N/A")
 
@@ -269,12 +287,9 @@ def main():
             
             analysis_options = ["Overall Collection"]
             
-            # Add available filters based on data type and column presence
-            available_filters = {}
-            for key, col in FILTER_COLS.items():
-                if col in df.columns:
-                    analysis_options.append(f"By {key}")
-                    available_filters[key] = col
+            # Add available filters based on detected columns
+            for key in filter_keys_available:
+                analysis_options.append(f"By {key}")
             
             analysis_type = st.selectbox(
                 "Analysis Type",
@@ -287,7 +302,7 @@ def main():
             
             if analysis_type != "Overall Collection":
                 filter_key = analysis_type.replace("By ", "")
-                filter_col_name = available_filters.get(filter_key)
+                filter_col_name = actual_filter_cols.get(filter_key) # Use the detected actual column name
                 
                 if filter_col_name:
                     options = sorted(df[filter_col_name].dropna().unique())
@@ -492,12 +507,12 @@ plotly
             #### Required Columns
             - **All Types:** `Subjects` (terms separated by semicolons)
             - **Physical:** A column for **Loans** or **Checkouts** (for weighting)
-            - **Digital (Local):** Columns for **Downloads** or **Views** (for weighting)
+            - **Digital (Local):** Columns for **Downloads/Digital File Downloads** or **Views/Digital File Views** (for weighting)
             - **COUNTER:** A column like **Total_Item_Requests** or **Unique_Item_Requests**
             
             #### Optional Columns (for filtering)
             - **Physical:** `Location Name` and `LC Classification Code`
-            - **Digital (Local):** `Name of file` and `Collection Name`
+            - **Digital (Local):** `Name of file/File Name` and `Collection Name`
             - **COUNTER:** `Title`, **Platform**, and **Publisher**
             
             ### Step 2: Upload your file
@@ -529,7 +544,7 @@ plotly
             st.markdown("#### Digital Collections (Local) Sample")
             sample_digital = pd.DataFrame({
                 'Title': ['Report A', 'Image B', 'Video C'],
-                'Name of file': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'],
+                'File Name': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'], # Using your column name
                 'Collection Name': ['Institutional Repository', 'Digital Archives', 'Institutional Repository'], 
                 'URL': ['http://...', 'http://...', 'http://...'],
                 'Subjects': [
@@ -537,8 +552,8 @@ plotly
                     'Local history; Architecture; 1950s',
                     'Oral history; Interviews; Civil rights'
                 ],
-                'Downloads': [120, 50, 0],
-                'Views': [500, 200, 800]
+                'Digital File Downloads': [120, 50, 0], # Using your column name
+                'Digital File Views': [500, 200, 800] # Using your column name
             })
             st.dataframe(sample_digital, use_container_width=True)
 
@@ -597,7 +612,7 @@ plotly
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v4.0 | Built with Streamlit</p>
+            <p>Library Word Cloud Generator v4.1 | Built with Streamlit</p>
             <p>For support, contact your library data team</p>
         </div>
         """, unsafe_allow_html=True)
