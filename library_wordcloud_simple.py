@@ -1,6 +1,6 @@
 """
-Library Word Cloud Generator - Simple Upload Version
-Upload your library CSV file and instantly generate word clouds!
+Subject Analysis Tool for Physical Checkout Data - Simple Upload Version
+Upload your CSV file and instantly generate word clouds and frequency tables.
 """
 
 import streamlit as st
@@ -16,7 +16,7 @@ import base64
 
 # Page configuration
 st.set_page_config(
-    page_title="Library Word Cloud Generator",
+    page_title="Subject Analysis Tool for Physical Checkout Data",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -163,8 +163,8 @@ def create_download_link(df, filename="data.csv"):
 # Main app
 def main():
     # Header with instructions
-    st.title("📚 Library Word Cloud Generator")
-    st.markdown("### Upload your library CSV file to create instant word clouds!")
+    st.title("📚 Subject Analysis Tool for Physical Checkout Data")
+    st.markdown("### Upload your CSV file and instantly generate word clouds and frequency tables.")
     
     # Create columns for layout
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -172,7 +172,7 @@ def main():
     with col2:
         st.markdown("""
         <div class="uploadbox">
-            <h2>📂 Upload Your Library Data</h2>
+            <h2>📂 Upload Your Data</h2>
             <p>Drag and drop or click to browse</p>
         </div>
         """, unsafe_allow_html=True)
@@ -255,28 +255,27 @@ def main():
             if has_lc:
                 analysis_options.append("By LC Classification")
             
-            # FIX APPLIED HERE: The ( was missing after st.selectbox
             analysis_type = st.selectbox(
                 "Analysis Type",
                 analysis_options,
                 help="Choose how to analyze your data"
             )
             
-            # Specific selector based on analysis type
-            selected_item = None
+            # Specific selector based on analysis type (now using MULTISELECT)
+            selected_items = None
             if analysis_type == "By Location" and has_location:
                 locations = sorted(df['Location Name'].dropna().unique())
-                selected_item = st.selectbox(
-                    "Select Location",
+                selected_items = st.multiselect(
+                    "Select Location(s)",
                     locations,
-                    format_func=lambda x: f"{x} ({len(df[df['Location Name']==x])} items)"
+                    default=locations # Default to selecting all locations
                 )
             elif analysis_type == "By LC Classification" and has_lc:
                 lc_codes = sorted(df['LC Classification Code'].dropna().unique())
-                selected_item = st.selectbox(
-                    "Select LC Class",
+                selected_items = st.multiselect(
+                    "Select LC Class(es)",
                     lc_codes,
-                    format_func=lambda x: f"{x} - {get_lc_description(x)}"
+                    default=lc_codes # Default to selecting all LC codes
                 )
             
             st.markdown("---")
@@ -321,16 +320,30 @@ def main():
             if analysis_type == "Overall Collection":
                 filtered_df = df
                 title_suffix = "Entire Collection"
-            elif analysis_type == "By Location":
-                filtered_df = df[df['Location Name'] == selected_item]
-                title_suffix = selected_item
-            elif analysis_type == "By LC Classification":
-                filtered_df = df[df['LC Classification Code'] == selected_item]
-                title_suffix = f"{selected_item} - {get_lc_description(selected_item)}"
+            
+            elif analysis_type == "By Location" and selected_items:
+                # Use isin() to filter for multiple selections
+                filtered_df = df[df['Location Name'].isin(selected_items)]
+                # Create a concise title suffix
+                display_list = selected_items[:2]
+                title_suffix = f"Locations: {', '.join(display_list)}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
+            
+            elif analysis_type == "By LC Classification" and selected_items:
+                # Use isin() to filter for multiple selections
+                filtered_df = df[df['LC Classification Code'].isin(selected_items)]
+                # Create a concise title suffix with descriptions
+                display_codes = [f"{c}" for c in selected_items]
+                title_suffix = f"LC Classes: {', '.join(display_codes[:2])}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
+            
             else:
                 filtered_df = df
                 title_suffix = "All Data"
-            
+
+            # Check if any data remains after filtering
+            if filtered_df.empty:
+                st.warning(f"No data found for the selected {analysis_type.split(' ')[1].lower()}(s). Please adjust your selection.")
+                return
+
             # Process subjects
             with st.spinner('Processing subjects...'):
                 all_subjects = Counter()
@@ -493,6 +506,7 @@ plotly
             
             ### Step 3: Configure settings
             - Choose analysis type (Overall, By Location, or By LC Classification)
+            - **Note:** For Location and LC Classification, you can now select **multiple** options.
             - Adjust word cloud settings in the sidebar
             - Select display options
             
@@ -505,6 +519,8 @@ plotly
             - Download the word cloud as PNG
             - Export frequency data as CSV
             - Use for reports, presentations, or further analysis
+            
+            **Pro Tip:** Use the multi-select feature to compare usage trends between two similar branches or across a few key LC subjects!
             """)
         
         with st.expander("📊 Sample data format"):
@@ -559,8 +575,8 @@ plotly
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v1.0 | Built with Streamlit</p>
-            <p>For support, contact your library data team</p>
+            <p>Subject Analysis Tool for Physical Checkout DataGenerator v1.0 | Built with Streamlit | Built with assistance from Claude AI</p>
+            <p>For support, contact Kay P Maye at kmaye@tualne.edu </p>
         </div>
         """, unsafe_allow_html=True)
 
