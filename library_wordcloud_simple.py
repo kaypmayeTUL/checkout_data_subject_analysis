@@ -163,7 +163,7 @@ def create_download_link(df, filename="data.csv"):
 # Main app
 def main():
     # Header with instructions
-    st.title("📚 Subject Analysis Tool for Physical Checkout Data")
+    st.title("📚 Subject Analysis Tool for Physical Checkout Data | Tulane University Libraries")
     st.markdown("### Upload your CSV file and instantly generate word clouds and frequency tables.")
     
     # Create columns for layout
