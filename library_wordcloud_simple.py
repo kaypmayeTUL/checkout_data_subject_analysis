@@ -112,7 +112,7 @@ def process_subjects(subjects_str, weight):
 def main():
     
     # Header
-    st.title("📚 Library Collection Subject Analyzer | Tulane University Libraries")
+    st.title("📚 Library Collection Subject Analyzer")
     st.markdown("### Upload your library data (Physical, Digital, or COUNTER) to analyze subject trends.")
     
     # Data Type Selection (First step in sidebar)
@@ -132,16 +132,14 @@ def main():
         METRIC_TITLE = "Total Checkouts"
         METRIC_UNIT = "Checkouts"
         FILTER_COLS = {
-            'Location': 'Location Name',
-            'LC Classification': 'LC Classification Code'
+            'Location': ['Location Name'],
+            'LC Classification': ['LC Classification Code']
         }
     elif data_type == 'Digital Collections (Local)':
-        # Updated to include common export names like 'Digital File Views' and 'File Name'
         WEIGHT_COL_ALIASES = ['Downloads', 'Views', 'Digital File Downloads', 'Digital File Views']
         METRIC_TITLE = "Total Usage (D/V)"
         METRIC_UNIT = "Views + Downloads"
         FILTER_COLS = {
-            # Use a list of aliases for filter columns and we will find the match later
             'Resource Name': ['Name of file', 'File Name'], 
             'Collection Name': ['Collection Name']
         }
@@ -283,41 +281,33 @@ def main():
 
         # --- Settings in sidebar ---
         with st.sidebar:
-            st.subheader("Filter & Visualize")
+            st.subheader("⬇️ Filter Data (Combine with AND logic)")
             
-            analysis_options = ["Overall Collection"]
+            # Dictionary to hold user selections from all filters
+            filter_selections = {}
             
-            # Add available filters based on detected columns
-            for key in filter_keys_available:
-                analysis_options.append(f"By {key}")
-            
-            analysis_type = st.selectbox(
-                "Analysis Type",
-                analysis_options,
-                help="Choose how to filter your data"
-            )
-            
-            selected_items = None
-            filter_col_name = None
-            
-            if analysis_type != "Overall Collection":
-                filter_key = analysis_type.replace("By ", "")
-                filter_col_name = actual_filter_cols.get(filter_key) # Use the detected actual column name
-                
-                if filter_col_name:
+            if filter_keys_available:
+                st.markdown("---")
+                # Create a multi-select box for every available filter column
+                for key in filter_keys_available:
+                    filter_col_name = actual_filter_cols[key]
                     options = sorted(df[filter_col_name].dropna().unique())
+                    
                     selected_items = st.multiselect(
-                        f"Select {filter_key}(s)",
+                        f"Filter by {key}",
                         options,
-                        default=options
+                        default=options, # Default to selecting all items
+                        key=f"filter_{key}"
                     )
-                else:
-                    st.warning(f"Filter column for {filter_key} not found.")
+                    filter_selections[filter_col_name] = selected_items
+                st.markdown("---")
+            else:
+                st.info("No filter columns available in the uploaded data.")
 
-            st.markdown("---")
+
             
             # Word cloud settings
-            st.subheader("Word Cloud Settings")
+            st.subheader("🎨 Visualization Settings")
             max_words = st.slider("Maximum words", 20, 200, 100, 10)
             min_word_length = st.slider("Minimum word length", 1, 10, 3)
             color_scheme = st.selectbox(
@@ -335,22 +325,30 @@ def main():
         # Generate button
         if st.button("🎨 Generate Word Cloud", type="primary", use_container_width=True):
             
-            # --- Filtering Logic ---
-            filtered_df = df
-            title_suffix = f"{data_type} - Entire Collection"
-            
-            if analysis_type != "Overall Collection" and selected_items and filter_col_name:
-                # Use isin() to filter for multiple selections
-                filtered_df = df[df[filter_col_name].isin(selected_items)]
-                
-                # Create a concise title suffix
-                display_list = selected_items[:2]
-                filter_key = analysis_type.replace("By ", "")
-                title_suffix = f"{data_type} - {filter_key}: {', '.join(display_list)}{'...' if len(selected_items) > 2 else ''} ({len(selected_items)} selected)"
+            # --- Filtering Logic (Combining all selected filters) ---
+            filtered_df = df.copy()
+            filter_summary_parts = []
+
+            for col_name, selected_values in filter_selections.items():
+                if selected_values and len(selected_values) < len(df[col_name].dropna().unique()):
+                    # Apply filter (AND logic)
+                    filtered_df = filtered_df[filtered_df[col_name].isin(selected_values)]
+                    
+                    # Create a summary part for the title
+                    key = next(k for k, v in actual_filter_cols.items() if v == col_name)
+                    display_list = selected_values[:1]
+                    filter_summary_parts.append(f"{key}: {', '.join(display_list)}{'...' if len(selected_values) > 1 else ''} ({len(selected_values)} selected)")
+
+
+            # Create the dynamic title suffix
+            if filter_summary_parts:
+                 title_suffix = f"{data_type} - Filtered ({' | '.join(filter_summary_parts)})"
+            else:
+                title_suffix = f"{data_type} - Entire Collection"
             
             # Check if any data remains after filtering
             if filtered_df.empty:
-                st.warning(f"No data found for the selected filter(s). Please adjust your selection.")
+                st.warning(f"No data found for the selected filter combination. Please adjust your selection.")
                 return
 
             # Process subjects
@@ -388,10 +386,13 @@ def main():
             fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
             img_buffer.seek(0)
             
+            # Clean up title for file name
+            safe_title = re.sub(r'[^\w\-_\. ]', '', title_suffix).replace(' ', '_')
+            
             st.download_button(
                 label="📥 Download Word Cloud (PNG)",
                 data=img_buffer,
-                file_name=f"wordcloud_{title_suffix.replace(' ', '_').replace('/', '_')}.png",
+                file_name=f"wordcloud_{safe_title}.png",
                 mime="image/png"
             )
             
@@ -451,7 +452,7 @@ def main():
                 st.download_button(
                     label="📥 Download Frequency Table (CSV)",
                     data=csv,
-                    file_name=f"frequencies_{title_suffix.replace(' ', '_').replace('/', '_')}.csv",
+                    file_name=f"frequencies_{safe_title}.csv",
                     mime="text/csv"
                 )
                 
@@ -499,28 +500,24 @@ plotly
                 mime="text/plain"
             )
             
-        with st.expander("📖 How to use this tool", expanded=True):
+        with st.expander("📖 How to use this tool (New Combined Filters!)", expanded=True):
             st.markdown(f"""
             ### Step 1: Select Data Type and Prepare CSV
             Use the sidebar to choose **Physical**, **Digital (Local)**, or **COUNTER Reports**.
             
             #### Required Columns
             - **All Types:** `Subjects` (terms separated by semicolons)
-            - **Physical:** A column for **Loans** or **Checkouts** (for weighting)
-            - **Digital (Local):** Columns for **Downloads/Digital File Downloads** or **Views/Digital File Views** (for weighting)
-            - **COUNTER:** A column like **Total_Item_Requests** or **Unique_Item_Requests**
-            
-            #### Optional Columns (for filtering)
-            - **Physical:** `Location Name` and `LC Classification Code`
-            - **Digital (Local):** `Name of file/File Name` and `Collection Name`
-            - **COUNTER:** `Title`, **Platform**, and **Publisher**
+            - **Weighting Columns** (Choose one or a combination):
+                - **Physical:** `Loans` or `Checkouts`
+                - **Digital (Local):** `Downloads`/`Digital File Downloads` or `Views`/`Digital File Views`
+                - **COUNTER:** `Total_Item_Requests` or `Unique_Item_Requests`
             
             ### Step 2: Upload your file
             - Click the upload area above or drag and drop your CSV file.
             
-            ### Step 3: Configure settings
-            - Choose analysis type (Overall or filtered by an available category)
-            - **Note:** All filtering options now support selecting **multiple** items.
+            ### Step 3: Configure Filters and Settings
+            - **Combined Filtering:** The sidebar now shows **all available filters** (e.g., Location, LC Classification). By default, all items are selected.
+            - To drill down, deselect items in one or more filter boxes. The results will include only items that meet **ALL** selected criteria (AND logic).
             
             ### Step 4: Generate visualizations
             - Click the "Generate Word Cloud" button to see the results.
@@ -541,10 +538,10 @@ plotly
             })
             st.dataframe(sample_physical, use_container_width=True)
 
-            st.markdown("#### Digital Collections (Local) Sample")
+            st.markdown("#### Digital Collections (Local) Sample (Using your column names)")
             sample_digital = pd.DataFrame({
                 'Title': ['Report A', 'Image B', 'Video C'],
-                'File Name': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'], # Using your column name
+                'File Name': ['Annual Report 2024', 'Historical Photo Set', 'Oral History Interview'], 
                 'Collection Name': ['Institutional Repository', 'Digital Archives', 'Institutional Repository'], 
                 'URL': ['http://...', 'http://...', 'http://...'],
                 'Subjects': [
@@ -552,8 +549,8 @@ plotly
                     'Local history; Architecture; 1950s',
                     'Oral history; Interviews; Civil rights'
                 ],
-                'Digital File Downloads': [120, 50, 0], # Using your column name
-                'Digital File Views': [500, 200, 800] # Using your column name
+                'Digital File Downloads': [120, 50, 0], 
+                'Digital File Views': [500, 200, 800] 
             })
             st.dataframe(sample_digital, use_container_width=True)
 
@@ -602,17 +599,17 @@ plotly
         with st.expander("❓ Frequently Asked Questions"):
             st.markdown("""
             **Q: How is the weighting calculated?**
-            A: It uses the most relevant usage column found: Loans (Physical), Downloads/Views (Digital Local), or Total/Unique Requests (COUNTER). If no usage column is found, it defaults to counting the number of records.
+            A: It uses the most relevant usage column found. If none is found, it defaults to counting the number of records (1 unit of usage per record).
             
-            **Q: Can I analyze data from different types together?**
-            A: You must upload one file type at a time. The reports can then be compared manually.
+            **Q: How do the new combined filters work?**
+            A: The filters work with **AND** logic. If you select 'Main Library' in the Location filter AND select 'Q' in the LC Classification filter, the results will only include items that are both in the Main Library **AND** classified as 'Q'.
             """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v4.1 | Built with Streamlit</p>
+            <p>Library Word Cloud Generator v4.2 | Built with Streamlit</p>
             <p>For support, contact your library data team</p>
         </div>
         """, unsafe_allow_html=True)
