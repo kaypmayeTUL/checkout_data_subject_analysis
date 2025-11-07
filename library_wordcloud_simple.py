@@ -579,22 +579,14 @@ def main():
             - Ensure weight columns have numeric values
             """)
     
-    # Footer
-
+ # Footer
     st.markdown("---")
-
     st.markdown("""
-
         <div style='text-align: center; color: #666;'>
-
-            <p>Library Word Cloud Generator v4.2 | Built with Streamlit and assistance from Claude AI and Gemini AI</p>
-
-            <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
-
+            <p>Library Word Cloud Generator v4.3 | Built with Streamlit, Claude AI and Gemini AI</p>
+            <p>For support, contact Kay P Maye at kmaye@tulane.edu</p>
         </div>
-
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-
     main()
