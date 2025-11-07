@@ -111,14 +111,6 @@ def process_subjects(subjects_str, weight):
 # Main app
 def main():
     
-    # Initialize session state for persistent results (FIX for dynamic search)
-    if 'all_subjects' not in st.session_state:
-        st.session_state['all_subjects'] = None
-    if 'title_suffix' not in st.session_state:
-        st.session_state['title_suffix'] = None
-    if 'metric_unit' not in st.session_state:
-        st.session_state['metric_unit'] = ""
-
     # Header
     st.title("📚 Library Collection Use/Subject Analyzer")
     st.markdown("### Select your data type and upload your CSV to analyze subject trends weighted by usage.")
@@ -129,7 +121,7 @@ def main():
         data_type = st.radio(
             "Select Data Collection Type:",
             ['Physical Collections', 'Digital Collections (Tulane Digital Library)', 'COUNTER Reports (e-resources)'],
-            index=1, # Default to Digital Collections
+            index=1,  # Default to Digital Collections
             help="This determines the required columns and usage metric."
         )
         st.markdown("---")
@@ -172,20 +164,24 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        # Use the uploaded file's contentFetchId to access it in the code interpreter
-        uploaded_file = 'digital_object_use.csv' 
-        
-    df = None
+        uploaded_file = st.file_uploader(
+            "Choose your CSV file",
+            type=['csv'],
+            help=f"Upload the {data_type.lower()} data CSV file",
+            label_visibility="collapsed"
+        )
+    
     if uploaded_file is not None:
-        st.success(f"✅ File '{uploaded_file}' loaded successfully!")
+        st.success(f"✅ File '{uploaded_file.name}' uploaded successfully!")
         
-        # Load data with proper encoding handling (Using pandas read_csv directly for the code interpreter environment)
+        # Load data with proper encoding handling
         try:
             # Try UTF-8 with BOM first
             df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
         except:
             try:
-                # Fallback to Latin-1
+                # Reset file pointer
+                uploaded_file.seek(0)
                 df = pd.read_csv(uploaded_file, encoding='latin-1')
             except Exception as e:
                 st.error(f"Error reading file: {e}")
@@ -208,23 +204,23 @@ def main():
 
         # Initialize weight calculation
         weight_col = None
-        df['Weight'] = 1 # Default weight
+        df['Weight'] = 1  # Default weight
         
-        # Special handling for Digital Collections (FIXED: This logic is robust)
+        # Special handling for Digital Collections
         if data_type == 'Digital Collections (Tulane Digital Library)':
             # Look for Downloads and Views columns
             downloads_col = None
             views_col = None
             
             for col in df.columns:
-                if 'Digital File Downloads' in col or 'Downloads' in col:
+                if 'Download' in col:
                     downloads_col = col
-                if 'Digital File Views' in col or 'Views' in col and 'Last' not in col: # Exclude "File Last View Date"
+                if 'View' in col and 'Last' not in col:  # Exclude "File Last View Date"
                     views_col = col
             
             # Calculate combined weight
             if downloads_col or views_col:
-                st.info(f"Found usage columns - Downloads: **{downloads_col}**, Views: **{views_col}**")
+                st.info(f"Found columns - Downloads: {downloads_col}, Views: {views_col}")
                 
                 if downloads_col:
                     df['Downloads_clean'] = pd.to_numeric(df[downloads_col], errors='coerce').fillna(0)
@@ -285,6 +281,14 @@ def main():
                     actual_filter_cols[key] = matching_cols[0]
                     break
         
+        # Debug: Show filter mapping
+        with st.expander("🔍 Debug: Filter Mapping", expanded=False):
+            st.write("**Filter columns mapped:**")
+            for key, col in actual_filter_cols.items():
+                st.write(f"- {key}: {col}")
+            if not actual_filter_cols:
+                st.warning("No filter columns could be mapped!")
+                
         # Display data overview
         st.markdown("---")
         st.subheader("📊 Data Overview")
@@ -336,7 +340,7 @@ def main():
                     selected_items = st.multiselect(
                         f"Filter by {key}",
                         options=options,
-                        default=options, # All selected by default
+                        default=options,  # All selected by default
                         key=f"filter_{key}",
                         help=f"Select specific {key.lower()}s to include"
                     )
@@ -391,8 +395,6 @@ def main():
             # Check if any data remains
             if filtered_df.empty:
                 st.warning("No data found for the selected filters. Please adjust your selection.")
-                # Reset session state for table if generation failed
-                st.session_state['all_subjects'] = None 
                 return
             
             st.info(f"Processing {len(filtered_df)} records after filtering...")
@@ -407,26 +409,19 @@ def main():
             
             if not all_subjects:
                 st.warning("No subject data found for this selection.")
-                st.session_state['all_subjects'] = None # Reset session state
                 return
-            
-            # Filter by minimum word length
-            filtered_subjects = {term: count for term, count in all_subjects.items() 
-                                if term and len(term) >= min_word_length}
-
-            if not filtered_subjects:
-                st.warning("No terms found after applying minimum word length filter.")
-                st.session_state['all_subjects'] = None # Reset session state
-                return
-
-            # --- Save results to Session State (FIX) ---
-            st.session_state['all_subjects'] = all_subjects
-            st.session_state['title_suffix'] = title_suffix
-            st.session_state['metric_unit'] = METRIC_UNIT
             
             # Generate word cloud
             st.markdown("---")
             st.subheader(f"☁️ Word Cloud - {title_suffix}")
+            
+            # Filter by minimum word length
+            filtered_subjects = {term: count for term, count in all_subjects.items() 
+                               if term and len(term) >= min_word_length}
+            
+            if not filtered_subjects:
+                st.warning("No terms found after applying minimum word length filter.")
+                return
             
             wordcloud = WordCloud(
                 width=1200, 
@@ -444,7 +439,7 @@ def main():
             ax.imshow(wordcloud, interpolation='bilinear')
             ax.axis('off')
             ax.set_title(f'Subject Terms - {title_suffix}\n(Weighted by {METRIC_UNIT})', 
-                         fontsize=16, fontweight='bold', pad=20)
+                        fontsize=16, fontweight='bold', pad=20)
             st.pyplot(fig)
             
             # Download button for word cloud
@@ -487,58 +482,50 @@ def main():
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
-
-    # --- Frequency Table and Dynamic Search (FIXED: Runs outside the button block) ---
-    if st.session_state['all_subjects'] is not None and st.session_state['metric_unit'] != "" and show_table:
-        
-        all_subjects = st.session_state['all_subjects']
-        title_suffix = st.session_state['title_suffix']
-        METRIC_UNIT = st.session_state['metric_unit']
-        
-        st.markdown("---")
-        st.subheader("📋 Complete Frequency Table")
-        
-        freq_df = pd.DataFrame(all_subjects.items(), columns=['Subject Term', 'Weighted Count'])
-        freq_df = freq_df.sort_values('Weighted Count', ascending=False)
-        freq_df['Rank'] = range(1, len(freq_df) + 1)
-        freq_df = freq_df[['Rank', 'Subject Term', 'Weighted Count']]
-        
-        # Add search box (Dynamic interaction now works)
-        search = st.text_input("🔍 Search terms:", "", key='search_table_dynamic')
-        
-        if search:
-            freq_df = freq_df[freq_df['Subject Term'].str.contains(search, case=False, na=False)]
-        
-        safe_title = re.sub(r'[^\w\-_\. ]', '', title_suffix).replace(' ', '_')
-        
-        # Display
-        st.dataframe(
-            freq_df,
-            use_container_width=True,
-            height=400,
-            hide_index=True
-        )
-        
-        # Download CSV
-        csv = freq_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Frequency Table (CSV)",
-            data=csv,
-            file_name=f"frequencies_{safe_title}.csv",
-            mime="text/csv"
-        )
-        
-        # Summary stats
-        st.info(f"""
-        **Summary Statistics:**
-        - Total unique terms: {len(freq_df):,}
-        - Total weighted occurrences: {freq_df['Weighted Count'].sum():,.0f}
-        - Most common term: "{freq_df.iloc[0]['Subject Term'] if not freq_df.empty else 'N/A'}"
-        - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f if not freq_df.empty else 0}
-        """)
+            
+            # Frequency table
+            if show_table:
+                st.markdown("---")
+                st.subheader("📋 Complete Frequency Table")
+                
+                freq_df = pd.DataFrame(all_subjects.items(), columns=['Subject Term', 'Weighted Count'])
+                freq_df = freq_df.sort_values('Weighted Count', ascending=False)
+                freq_df['Rank'] = range(1, len(freq_df) + 1)
+                freq_df = freq_df[['Rank', 'Subject Term', 'Weighted Count']]
+                
+                # Add search box
+                search = st.text_input("🔍 Search terms:", "", key='search_table')
+                if search:
+                    freq_df = freq_df[freq_df['Subject Term'].str.contains(search, case=False, na=False)]
+                
+                # Display
+                st.dataframe(
+                    freq_df,
+                    use_container_width=True,
+                    height=400,
+                    hide_index=True
+                )
+                
+                # Download CSV
+                csv = freq_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Frequency Table (CSV)",
+                    data=csv,
+                    file_name=f"frequencies_{safe_title}.csv",
+                    mime="text/csv"
+                )
+                
+                # Summary stats
+                st.info(f"""
+                **Summary Statistics:**
+                - Total unique terms: {len(freq_df):,}
+                - Total weighted occurrences: {freq_df['Weighted Count'].sum():,.0f}
+                - Most common term: "{freq_df.iloc[0]['Subject Term'] if not freq_df.empty else 'N/A'}"
+                - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f if not freq_df.empty else 0}
+                """)
     
-    # --- Instructions/Footer (Only show if no file is uploaded or processing is done) ---
-    if uploaded_file is None:
+    else:
+        # Show instructions when no file uploaded
         st.markdown("---")
         
         with st.expander("📖 How to use this tool", expanded=True):
@@ -591,13 +578,13 @@ def main():
             - Check that subjects are semicolon-separated
             - Ensure weight columns have numeric values
             """)
-        
+    
     # Footer
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v4.3 | Built with Streamlit, Claude AI, and Google Gemini</p>
-            <p>For support, contactKay P Maye at kmaye@tulane.edu </p>
+            <p>Library Word Cloud Generator v4.2 | Built with Streamlit, Claude AI, and Gemini AI</p>
+            <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
         </div>
         """, unsafe_allow_html=True)
 
