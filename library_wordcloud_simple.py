@@ -121,16 +121,17 @@ def main():
     st.title("📚 Library Collection Use/Subject Analyzer")
     st.markdown("### Select your data type and upload your CSV to analyze subject trends weighted by usage.")
     
-    # Data Type Selection (First step in sidebar)
-    with st.sidebar:
-        st.header("⚙️ Data Source")
-        data_type = st.radio(
-            "Select Data Collection Type:",
-            ['Physical Collections', 'Digital Collections (Tulane Digital Library)', 'COUNTER Reports (e-resources)'],
-            index=1,  # Default to Digital Collections
-            help="This determines the required columns and usage metric."
-        )
-        st.markdown("---")
+    # Data Type Selection (Main area for visibility)
+    st.markdown("---")
+    st.subheader("⚙️ Data Source")
+    data_type = st.radio(
+        "Select Data Collection Type:",
+        ['Physical Collections', 'Digital Collections (Tulane Digital Library)', 'COUNTER Reports (e-resources)'],
+        index=1,  # Default to Digital Collections
+        help="This determines the required columns and usage metric.",
+        horizontal=True
+    )
+    st.markdown("---")
 
     # Column definitions based on data type
     if data_type == 'Physical Collections':
