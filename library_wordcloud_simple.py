@@ -493,11 +493,6 @@ def main():
                 freq_df['Rank'] = range(1, len(freq_df) + 1)
                 freq_df = freq_df[['Rank', 'Subject Term', 'Weighted Count']]
                 
-                # Add search box
-                search = st.text_input("🔍 Search terms:", "", key='search_table')
-                if search:
-                    freq_df = freq_df[freq_df['Subject Term'].str.contains(search, case=False, na=False)]
-                
                 # Display
                 st.dataframe(
                     freq_df,
@@ -516,13 +511,14 @@ def main():
                 )
                 
                 # Summary stats
-                st.info(f"""
-                **Summary Statistics:**
-                - Total unique terms: {len(freq_df):,}
-                - Total weighted occurrences: {freq_df['Weighted Count'].sum():,.0f}
-                - Most common term: "{freq_df.iloc[0]['Subject Term'] if not freq_df.empty else 'N/A'}"
-                - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f if not freq_df.empty else 0}
-                """)
+                if not freq_df.empty:
+                    st.info(f"""
+                    **Summary Statistics:**
+                    - Total unique terms: {len(freq_df):,}
+                    - Total weighted occurrences: {freq_df['Weighted Count'].sum():,.0f}
+                    - Most common term: "{freq_df.iloc[0]['Subject Term']}"
+                    - Average occurrences per term: {freq_df['Weighted Count'].mean():.1f}
+                    """)
     
     else:
         # Show instructions when no file uploaded
@@ -583,7 +579,7 @@ def main():
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #666;'>
-            <p>Library Word Cloud Generator v4.2 | Built with Streamlit, Claude AI, and Gemini AI</p>
+            <p>Library Word Cloud Generator v4.3 | Built with Streamlit, Claude AI, and Gemini AI</p>
             <p>For support, contact Kay P Maye at kmaye@tulane.edu </p>
         </div>
         """, unsafe_allow_html=True)
