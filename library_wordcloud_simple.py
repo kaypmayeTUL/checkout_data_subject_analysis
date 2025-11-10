@@ -84,11 +84,17 @@ def clean_subject_term(term):
         return None
     
     term = str(term).strip()
-    term = term.rstrip('.;')
+    term = term.rstrip('.;- ')  # Remove trailing periods, semicolons, dashes, and spaces
     # Remove date ranges in parentheses
     term = re.sub(r'\s*\([0-9\-]+\)', '', term)
-    # Standardize separators
+    # Standardize separators - replace -- with space-dash-space, then clean up multiple spaces
     term = term.replace('--', ' - ')
+    # Clean up multiple spaces around dashes
+    term = re.sub(r'\s*-\s*', ' - ', term)
+    # Remove any remaining multiple spaces
+    term = re.sub(r'\s+', ' ', term)
+    # Normalize to lowercase for consistency
+    term = term.lower()
     
     return term if term else None
 
