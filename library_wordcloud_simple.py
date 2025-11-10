@@ -467,17 +467,6 @@ def main():
                 st.markdown("---")
                 st.subheader(f"📊 Top {top_n} Subject Terms")
                 
-                # Option to customize chart title
-                default_chart_title = f'Top {top_n} Subject Terms - {title_suffix}'
-                custom_chart_title = st.text_input(
-                    "📝 Customize chart title (leave blank for default):",
-                    value="",
-                    placeholder=default_chart_title,
-                    help="Enter a custom title for the bar chart"
-                )
-                
-                chart_title = custom_chart_title if custom_chart_title else default_chart_title
-                
                 top_terms = all_subjects.most_common(top_n)
                 df_chart = pd.DataFrame(top_terms, columns=['Term', 'Count'])
                 
@@ -488,7 +477,7 @@ def main():
                     orientation='h',
                     color='Count',
                     color_continuous_scale=color_scheme,
-                    title=chart_title,
+                    title=f'Top {top_n} Subject Terms - {title_suffix}',
                     labels={'Count': f'Weighted Count ({METRIC_UNIT})', 'Term': 'Subject Term'}
                 )
                 
