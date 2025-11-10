@@ -392,11 +392,29 @@ def main():
                     else:
                         filter_summary_parts.append(f"{key}: {len(selected_values)} selected")
             
-            # Create title suffix
+            # Create title suffix with collection/location names
             if filter_summary_parts:
                 title_suffix = f"{data_type} - Filtered ({' | '.join(filter_summary_parts)})"
             else:
-                title_suffix = f"{data_type} - Entire Collection"
+                # Show collection/location names for unfiltered data
+                if filter_keys_available:
+                    # Get the first available filter column (Collections or Locations)
+                    first_filter_key = filter_keys_available[0]
+                    first_filter_col = actual_filter_cols[first_filter_key]
+                    
+                    # Get all unique values
+                    all_items = sorted(df[first_filter_col].dropna().unique().astype(str))
+                    
+                    # Format the title
+                    if len(all_items) <= 3:
+                        # If few items, list them all
+                        items_str = '; '.join(all_items)
+                        title_suffix = f"{data_type} - {items_str}"
+                    else:
+                        # If many items, show count
+                        title_suffix = f"{data_type} - All {len(all_items)} {first_filter_key}s"
+                else:
+                    title_suffix = f"{data_type} - Entire Collection"
             
             # Check if any data remains
             if filtered_df.empty:
